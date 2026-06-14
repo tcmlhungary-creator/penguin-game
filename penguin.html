@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>搶救小小企鵝的心情 🐧</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background: linear-gradient(180deg, #e0f2fe 0%, #bae6fd 100%);
+            overflow-x: hidden;
+        }
+        .pixel-font {
+            font-family: 'ZCOOL KuaiLe', 'Noto Sans TC', sans-serif;
+        }
+        /* 企鵝動畫 */
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-10px) rotate(1deg); }
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-8px); }
+            40%, 80% { transform: translateX(8px); }
+        }
+        @keyframes bounce-slow {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-15px); }
+        }
+        .penguin-float {
+            animation: float 3s ease-in-out infinite;
+        }
+        .penguin-shake {
+            animation: shake 0.4s ease-in-out infinite;
+        }
+        .penguin-bounce {
+            animation: bounce-slow 1s ease-in-out infinite;
+        }
+        /* 飄字特效 */
+        @keyframes floatUp {
+            0% { transform: translateY(0) scale(0.8); opacity: 0; }
+            20% { opacity: 1; }
+            100% { transform: translateY(-60px) scale(1.2); opacity: 0; }
+        }
+        .floating-text {
+            animation: floatUp 1.2s forwards ease-out;
+        }
+        /* 雪花/Kiss雨特效 */
+        .particle {
+            position: absolute;
+            pointer-events: none;
+            z-index: 50;
+            animation: fall linear forwards;
+        }
+        @keyframes fall {
+            0% { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(100vh) rotate(360deg); opacity: 0; }
+        }
+        /* 對話框尖角 */
+        .bubble-tail::after {
+            content: '';
+            position: absolute;
+            bottom: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-width: 12px 12px 0;
+            border-style: solid;
+            border-color: white transparent;
+            display: block;
+            width: 0;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between items-center p-4 relative select-none">
+
+    <!-- 背景裝飾雪花 -->
+    <div id="bg-snow-container" class="absolute inset-0 pointer-events-none overflow-hidden"></div>
+
+    <!-- 頂部標題與狀態列 -->
+    <header class="w-full max-w-md text-center mt-2 z-10">
+        <h1 class="pixel-font text-3xl md:text-4xl font-extrabold text-sky-800 drop-shadow-md tracking-wider flex items-center justify-center gap-2">
+            🐧 搶救小小企鵝的心情
+        </h1>
+        <p class="text-xs text-sky-600 mt-1 font-bold">每秒心情會自動下降，快來陪伴牠吧！</p>
+    </header>
+
+    <!-- 遊戲主舞台 -->
+    <main class="w-full max-w-md flex flex-col items-center flex-grow justify-center py-4 z-10 relative">
+        
+        <!-- 漂浮數字特效容器 -->
+        <div id="effect-container" class="absolute top-1/4 w-full h-24 pointer-events-none flex justify-center items-center z-30"></div>
+
+        <!-- 1. 心情血條 -->
+        <div class="w-full bg-sky-900/10 backdrop-blur-sm rounded-2xl p-4 shadow-inner border border-sky-100/50 mb-6">
+            <div class="flex justify-between items-center mb-1.5 font-bold text-sky-950">
+                <span class="flex items-center gap-1.5">
+                    <span id="mood-icon">😐</span>
+                    <span id="mood-status-text">企鵝心情中等</span>
+                </span>
+                <span id="mood-score-text" class="text-xl font-black text-sky-900">50 / 100</span>
+            </div>
+            <!-- 血條本體 -->
+            <div class="w-full h-6 bg-slate-300 rounded-full overflow-hidden border-2 border-white shadow-md relative">
+                <div id="mood-bar" class="h-full bg-gradient-to-r from-yellow-400 to-orange-500 transition-all duration-300 ease-out" style="width: 50%;"></div>
+                <!-- 警告閃爍條 -->
+                <div id="critical-alert" class="absolute inset-0 bg-red-600/30 opacity-0 transition-opacity duration-300 pointer-events-none animate-pulse"></div>
+            </div>
+        </div>
+
+        <!-- 2. 企鵝對話框 -->
+        <div class="relative w-full max-w-xs mb-8 transition-all duration-300 transform scale-100" id="speech-bubble-container">
+            <div id="speech-bubble" class="bg-white text-slate-800 text-lg font-bold rounded-2xl py-3 px-5 shadow-lg border-2 border-sky-200 text-center bubble-tail transition-all duration-300 min-h-[64px] flex items-center justify-center">
+                我很無聊，想找我的東西...
+            </div>
+        </div>
+
+        <!-- 3. 可愛企鵝 SVG 角色 -->
+        <div class="w-56 h-56 flex items-center justify-center mb-6 relative">
+            <svg id="penguin-svg" class="w-full h-full penguin-float transition-all duration-300" viewBox="0 0 200 200">
+                <!-- 企鵝陰影 -->
+                <ellipse cx="100" cy="180" rx="60" ry="12" fill="rgba(0,0,0,0.15)"/>
+                
+                <!-- 企鵝主體身體 -->
+                <path d="M 100,25 C 150,25 165,75 165,130 C 165,185 140,180 100,180 C 60,180 35,185 35,130 C 35,75 50,25 100,25 Z" fill="#2d3748" stroke="#1a202c" stroke-width="4"/>
+                
+                <!-- 企鵝肚子 (白色部分) -->
+                <path d="M 100,65 C 135,65 145,95 145,132 C 145,170 125,174 100,174 C 75,174 55,170 55,132 C 55,95 65,65 100,65 Z" fill="#ffffff" />
+                
+                <!-- 企鵝翅膀 (左) -->
+                <path id="wing-l" d="M 40,110 C 15,110 5,140 25,150 C 40,157 45,140 45,130 Z" fill="#2d3748" stroke="#1a202c" stroke-width="4" transform-origin="45 110"/>
+                <!-- 企鵝翅膀 (右) -->
+                <path id="wing-r" d="M 160,110 C 185,110 195,140 175,150 C 160,157 155,140 155,130 Z" fill="#2d3748" stroke="#1a202c" stroke-width="4" transform-origin="155 110"/>
+
+                <!-- 企鵝腳 (左 & 右) -->
+                <path d="M 65,173 C 55,173 45,183 55,188 C 65,191 75,188 75,178 Z" fill="#f6ad55" stroke="#dd6b20" stroke-width="2"/>
+                <path d="M 135,173 C 145,173 155,183 145,188 C 135,191 125,188 125,178 Z" fill="#f6ad55" stroke="#dd6b20" stroke-width="2"/>
+
+                <!-- 企鵝腮紅 (預設隱藏) -->
+                <ellipse id="blush-l" cx="72" cy="115" rx="8" ry="5" fill="#fbb6ce" opacity="0.8"/>
+                <ellipse id="blush-r" cx="128" cy="115" rx="8" ry="5" fill="#fbb6ce" opacity="0.8"/>
+
+                <!-- 企鵝眼睛與眼淚 -->
+                <!-- 預設眼睛 (睜開) -->
+                <g id="eyes-normal">
+                    <circle cx="80" cy="100" r="11" fill="#1a202c"/>
+                    <circle cx="77" cy="96" r="4" fill="#ffffff"/>
+                    <circle cx="120" cy="100" r="11" fill="#1a202c"/>
+                    <circle cx="117" cy="96" r="4" fill="#ffffff"/>
+                </g>
+                <!-- 難過/大哭眼睛 (隱藏) -->
+                <g id="eyes-sad" class="hidden">
+                    <path d="M 70,105 Q 80,95 90,105" fill="none" stroke="#1a202c" stroke-width="4" stroke-linecap="round"/>
+                    <path d="M 110,105 Q 120,95 130,105" fill="none" stroke="#1a202c" stroke-width="4" stroke-linecap="round"/>
+                    <!-- 淚水 -->
+                    <path d="M 75,108 C 70,120 70,135 77,140 C 80,135 80,120 78,108 Z" fill="#63b3ed" opacity="0.9"/>
+                    <path d="M 125,108 C 120,120 120,135 127,140 C 130,135 130,120 128,108 Z" fill="#63b3ed" opacity="0.9"/>
+                </g>
+                <!-- 生氣眼睛 (隱藏) -->
+                <g id="eyes-angry" class="hidden">
+                    <circle cx="80" cy="103" r="10" fill="#1a202c"/>
+                    <circle cx="120" cy="103" r="10" fill="#1a202c"/>
+                    <!-- 憤怒斜眉 -->
+                    <path d="M 68,90 L 90,100" stroke="#1a202c" stroke-width="5" stroke-linecap="round"/>
+                    <path d="M 132,90 L 110,100" stroke="#1a202c" stroke-width="5" stroke-linecap="round"/>
+                </g>
+                <!-- 贏了愛心/超開心眼睛 (隱藏) -->
+                <g id="eyes-happy" class="hidden">
+                    <!-- 愛心形狀眼睛 -->
+                    <path d="M 72,96 C 68,91 74,86 80,92 C 86,86 92,91 88,96 L 80,104 Z" fill="#f56565" />
+                    <path d="M 112,96 C 108,91 114,86 120,92 C 126,86 132,91 128,96 L 120,104 Z" fill="#f56565" />
+                </g>
+
+                <!-- 企鵝嘴巴 / 喙 -->
+                <!-- 預設嘴巴 -->
+                <polygon id="beak-normal" points="100,106 90,118 110,118" fill="#f6ad55" stroke="#dd6b20" stroke-width="2"/>
+                <!-- 哭泣大嘴 (隱藏) -->
+                <path id="beak-crying" d="M 90,114 Q 100,135 110,114 Z" fill="#e53e3e" stroke="#9b2c2c" stroke-width="2" class="hidden"/>
+                <!-- 開心小嘴 (隱藏) -->
+                <path id="beak-happy" d="M 92,112 Q 100,122 108,112" fill="none" stroke="#dd6b20" stroke-width="3" stroke-linecap="round" class="hidden"/>
+            </svg>
+        </div>
+
+    </main>
+
+    <!-- 下方三大核心互動按鈕 -->
+    <footer class="w-full max-w-md pb-6 px-2 z-10">
+        <div class="grid grid-cols-3 gap-3">
+            <button onclick="handleOptionClick(0)" class="option-btn bg-amber-400 hover:bg-amber-500 active:scale-95 text-amber-950 font-black py-4 px-1 rounded-2xl shadow-[0_6px_0_#b45309] border-2 border-amber-300 transition-all text-center flex flex-col items-center justify-center gap-1">
+                <span class="text-2xl">🪑</span>
+                <span class="text-sm md:text-base">在椅子上</span>
+            </button>
+            <button onclick="handleOptionClick(1)" class="option-btn bg-teal-400 hover:bg-teal-500 active:scale-95 text-teal-950 font-black py-4 px-1 rounded-2xl shadow-[0_6px_0_#0f766e] border-2 border-teal-300 transition-all text-center flex flex-col items-center justify-center gap-1">
+                <span class="text-2xl">🚪</span>
+                <span class="text-sm md:text-base">在衣櫃裡</span>
+            </button>
+            <button onclick="handleOptionClick(2)" class="option-btn bg-indigo-400 hover:bg-indigo-500 active:scale-95 text-indigo-950 font-black py-4 px-1 rounded-2xl shadow-[0_6px_0_#4338ca] border-2 border-indigo-300 transition-all text-center flex flex-col items-center justify-center gap-1">
+                <span class="text-2xl">🛋️</span>
+                <span class="text-sm md:text-base">在沙發下</span>
+            </button>
+        </div>
+    </footer>
+
+    <!-- 四、 中文挑戰題彈出視窗 (Quiz Modal) -->
+    <div id="quiz-modal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-50 hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl border-4 border-amber-400 transform scale-90 transition-transform duration-300" id="quiz-card">
+            <!-- 壞運氣標題列 -->
+            <div class="bg-gradient-to-r from-amber-400 to-orange-500 p-4 text-center relative">
+                <div class="absolute -top-3 left-4 text-4xl animate-bounce">⚡</div>
+                <h3 class="text-2xl font-black text-white drop-shadow-md pixel-font" id="bad-luck-banner">
+                    壞運氣！找錯了！
+                </h3>
+                <p class="text-xs text-amber-100 font-bold mt-1">請通過中文隨堂測驗來幫企鵝解圍！</p>
+            </div>
+            <!-- 題目內容 -->
+            <div class="p-6">
+                <div class="bg-amber-50 rounded-2xl p-4 mb-4 border border-amber-200">
+                    <span class="text-xs font-bold text-amber-600 tracking-wide uppercase">華語初學者挑戰 (A1)</span>
+                    <p id="quiz-question" class="text-lg font-extrabold text-slate-800 mt-1">
+                        蘋果是什麼顏色？
+                    </p>
+                </div>
+                <!-- 選項按鈕 -->
+                <div class="space-y-3" id="quiz-options-container">
+                    <!-- 動態生成選項 -->
+                </div>
+                
+                <!-- 錯誤反饋提示 -->
+                <p id="quiz-feedback" class="text-red-500 font-bold text-center mt-3 h-6 transition-all duration-300 opacity-0 text-sm">
+                    答錯囉！扣 10 分！請再試一次！
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 遊戲結束彈出視窗 (End Game Modal) -->
+    <div id="end-modal" class="fixed inset-0 bg-slate-900/95 backdrop-blur-md flex items-center justify-center p-4 z-50 hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-white rounded-3xl w-full max-w-sm p-8 text-center shadow-2xl border-4 border-sky-400 transform scale-90 transition-transform duration-300" id="end-card">
+            <div class="text-7xl mb-4" id="end-emoji">🏆</div>
+            <h2 class="text-3xl font-black text-slate-800 mb-2 pixel-font" id="end-title">你贏了！</h2>
+            <div class="bg-sky-50 rounded-2xl p-4 mb-6 border border-sky-100">
+                <p class="text-lg font-bold text-sky-950 italic" id="end-quote">「親一個！」</p>
+            </div>
+            <button onclick="resetGame()" class="w-full bg-gradient-to-r from-sky-400 to-blue-500 hover:from-sky-500 hover:to-blue-600 active:scale-95 text-white font-extrabold py-4 px-6 rounded-2xl shadow-lg border-b-4 border-blue-700 transition-all text-xl tracking-wider">
+                再玩一次 🎮
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. 音效生成器 (Web Audio API) ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        function playSound(type) {
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            
+            const now = audioCtx.currentTime;
+            
+            if (type === 'correct') {
+                // 輕快叮咚聲
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(523.25, now); // C5
+                osc.frequency.setValueAtTime(659.25, now + 0.1); // E5
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                osc.start(now);
+                osc.stop(now + 0.3);
+            } else if (type === 'wrong') {
+                // 答錯嗶嗶聲
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(150, now);
+                osc.frequency.linearRampToValueAtTime(80, now + 0.25);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+                osc.start(now);
+                osc.stop(now + 0.25);
+            } else if (type === 'badluck') {
+                // 警報/震撼效果音
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(300, now);
+                osc.frequency.setValueAtTime(600, now + 0.08);
+                osc.frequency.setValueAtTime(300, now + 0.16);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+                osc.start(now);
+                osc.stop(now + 0.35);
+            } else if (type === 'win') {
+                // 勝利琶音
+                const freqs = [261.63, 329.63, 392.00, 523.25, 659.25, 1046.50];
+                freqs.forEach((f, i) => {
+                    const oscSeq = audioCtx.createOscillator();
+                    const gainSeq = audioCtx.createGain();
+                    oscSeq.connect(gainSeq);
+                    gainSeq.connect(audioCtx.destination);
+                    
+                    oscSeq.frequency.setValueAtTime(f, now + (i * 0.08));
+                    gainSeq.gain.setValueAtTime(0.1, now + (i * 0.08));
+                    gainSeq.gain.exponentialRampToValueAtTime(0.01, now + (i * 0.08) + 0.3);
+                    
+                    oscSeq.start(now + (i * 0.08));
+                    oscSeq.stop(now + (i * 0.08) + 0.3);
+                });
+            } else if (type === 'lose') {
+                // 失敗哀傷聲
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(220, now);
+                osc.frequency.linearRampToValueAtTime(110, now + 0.6);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+                osc.start(now);
+                osc.stop(now + 0.6);
+            }
+        }
+
+        // --- 2. 遊戲狀態變數 ---
+        let mood = 50;
+        let isGameOver = false;
+        let isQuizMode = false;
+        
+        let decayInterval = null;
+        let demandTimeout = null;
+        
+        // 企鵝目前的需求
+        let currentDemand = null;
+
+        // 企鵝的需求設定與按鈕配對
+        const demandList = [
+            { id: 0, text: "我的書包在哪裡？🎒", answerIndex: 0 },
+            { id: 1, text: "我的手套在哪裡？🧤", answerIndex: 1 },
+            { id: 2, text: "我的蠟筆不見了！🖍️", answerIndex: 2 },
+            { id: 3, text: "我的課本丟在哪了？📖", answerIndex: 0 },
+            { id: 4, text: "我的外套放在哪？🧥", answerIndex: 1 },
+            { id: 5, text: "我的玩具車去哪了？🚗", answerIndex: 2 },
+            { id: 6, text: "我的帽子跑去哪了？🧢", answerIndex: 0 },
+            { id: 7, text: "我的襪子少一隻！🧦", answerIndex: 1 },
+            { id: 8, text: "我的鑰匙掉到哪裡了？🔑", answerIndex: 2 }
+        ];
+
+        // 壞運氣的文字
+        const badLuckTexts = ["找錯了！", "看錯了！", "說錯了！"];
+
+        // 中文挑戰題庫 (華語 A1 程度)
+        const quizBank = [
+            { q: "蘋果是什麼顏色？", a: "A. 紅色", b: "B. 藍色", c: "C. 黑色", ans: "A" },
+            { q: "太陽是什麼顏色？", a: "A. 綠色", b: "B. 紅色/黃色", c: "C. 紫色", ans: "B" },
+            { q: "哪一個是「水果」？", a: "A. 西瓜", b: "B. 桌子", c: "C. 小狗", ans: "A" },
+            { q: "星期一的「下一天」是？", a: "A. 星期二", b: "B. 星期五", c: "C. 星期日", ans: "A" },
+            { q: "一年總共有幾個月？", a: "A. 十個", b: "B. 十二個", c: "C. 五個", ans: "B" },
+            { q: "貓咪一般怎麼叫？", a: "A. 汪汪", b: "B. 喵喵", c: "C. 咩咩", ans: "B" },
+            { q: "我們用身體的什麼部位看書？", a: "A. 眼睛", b: "B. 鼻子", c: "C. 耳朵", ans: "A" },
+            { q: "小籠包和水餃是什麼？", a: "A. 飲料", b: "B. 食物", c: "C. 衣服", ans: "B" },
+            { q: "爸爸的爸爸，我們叫他什麼？", a: "A. 爺爺", b: "B. 外公", c: "C. 叔叔", ans: "A" },
+            { q: "冰淇淋吃起來感覺怎麼樣？", a: "A. 熱熱的", b: "B. 冰冰的", c: "C. 辣辣的", ans: "B" },
+            { q: "「香蕉」的顏色通常是？", a: "A. 綠色", b: "B. 粉紅色", c: "C. 黃色", ans: "C" },
+            { q: "現在是早上，我們要說？", a: "A. 早安", b: "B. 晚安", c: "C. 謝謝", ans: "A" },
+            { q: "哪一個可以「喝」？", a: "A. 麵包", b: "B. 牛奶", c: "C. 蘋果", ans: "B" },
+            { q: "飛機在什麼地方飛？", a: "A. 水裡", b: "B. 路上", c: "C. 天空", ans: "C" },
+            { q: "一隻手有幾根手指頭？", a: "A. 三根", b: "B. 五根", c: "C. 八根", ans: "B" }
+        ];
+
+        let currentQuiz = null;
+
+        // --- 3. DOM 節點獲取 ---
+        const moodBar = document.getElementById('mood-bar');
+        const moodScoreText = document.getElementById('mood-score-text');
+        const moodStatusText = document.getElementById('mood-status-text');
+        const moodIcon = document.getElementById('mood-icon');
+        const criticalAlert = document.getElementById('critical-alert');
+        
+        const speechBubble = document.getElementById('speech-bubble');
+        const speechBubbleContainer = document.getElementById('speech-bubble-container');
+        
+        const penguinSvg = document.getElementById('penguin-svg');
+        const wingL = document.getElementById('wing-l');
+        const wingR = document.getElementById('wing-r');
+        const eyesNormal = document.getElementById('eyes-normal');
+        const eyesSad = document.getElementById('eyes-sad');
+        const eyesAngry = document.getElementById('eyes-angry');
+        const eyesHappy = document.getElementById('eyes-happy');
+        const beakNormal = document.getElementById('beak-normal');
+        const beakCrying = document.getElementById('beak-crying');
+        const beakHappy = document.getElementById('beak-happy');
+
+        const quizModal = document.getElementById('quiz-modal');
+        const quizCard = document.getElementById('quiz-card');
+        const quizQuestion = document.getElementById('quiz-question');
+        const quizOptionsContainer = document.getElementById('quiz-options-container');
+        const quizFeedback = document.getElementById('quiz-feedback');
+        const badLuckBanner = document.getElementById('bad-luck-banner');
+
+        const endModal = document.getElementById('end-modal');
+        const endCard = document.getElementById('end-card');
+        const endEmoji = document.getElementById('end-emoji');
+        const endTitle = document.getElementById('end-title');
+        const endQuote = document.getElementById('end-quote');
+
+        const effectContainer = document.getElementById('effect-container');
+        const bgSnowContainer = document.getElementById('bg-snow-container');
+
+        // --- 4. 核心遊戲流程 ---
+
+        // 初始化
+        window.onload = () => {
+            createSnowBg();
+            resetGame();
+        };
+
+        // 背景飄雪花特效
+        function createSnowBg() {
+            for (let i = 0; i < 20; i++) {
+                setTimeout(() => {
+                    spawnSnow();
+                }, i * 300);
+            }
+            setInterval(spawnSnow, 1500);
+        }
+
+        function spawnSnow() {
+            if (isGameOver) return;
+            const snow = document.createElement('div');
+            snow.className = 'particle text-white/40 text-lg select-none';
+            snow.innerHTML = '❄';
+            snow.style.left = Math.random() * 100 + 'vw';
+            snow.style.fontSize = (Math.random() * 12 + 10) + 'px';
+            snow.style.animationDuration = (Math.random() * 5 + 5) + 's';
+            bgSnowContainer.appendChild(snow);
+            setTimeout(() => {
+                snow.remove();
+            }, 10000);
+        }
+
+        // 重置/開始遊戲
+        function resetGame() {
+            mood = 50;
+            isGameOver = false;
+            isQuizMode = false;
+            currentDemand = null;
+            
+            // 關閉 Modal
+            closeModal(quizModal, quizCard);
+            closeModal(endModal, endCard);
+            
+            // 重置企鵝狀態
+            setPenguinExpression('normal');
+            speechBubble.innerText = "哈囉！我現在心情很好，來陪我玩吧！";
+            speechBubbleContainer.className = "relative w-full max-w-xs mb-8 transform scale-100";
+            
+            updateMoodUI();
+            
+            // 清理並重新啟動計時器
+            clearInterval(decayInterval);
+            clearTimeout(demandTimeout);
+            
+            startDecay();
+            scheduleNextDemand(1500); // 1.5 秒後提出第一個需求
+        }
+
+        // 心情每秒扣 2 分
+        function startDecay() {
+            decayInterval = setInterval(() => {
+                if (isGameOver || isQuizMode) return;
+                
+                changeMood(-2);
+            }, 1000);
+        }
+
+        // 更改心情分數並更新 UI
+        function changeMood(amount) {
+            mood += amount;
+            if (mood > 100) mood = 100;
+            if (mood < 0) mood = 0;
+
+            updateMoodUI();
+            
+            // 數值增減特效
+            if (amount !== -2 && amount !== 0) { // 忽略每秒自動扣除的特效顯示
+                spawnFloatingText(amount > 0 ? `+${amount} 心情` : `${amount} 心情`, amount > 0 ? 'text-emerald-500' : 'text-red-500');
+            }
+
+            // 判斷勝負條件
+            if (mood >= 100) {
+                winGame();
+            } else if (mood <= 0) {
+                loseGame();
+            }
+        }
+
+        // 更新 UI 及企鵝動態表情
+        function updateMoodUI() {
+            moodBar.style.width = mood + '%';
+            moodScoreText.innerText = `${mood} / 100`;
+
+            // 調整血條漸層與警告效果
+            if (mood > 60) {
+                moodBar.className = "h-full bg-gradient-to-r from-emerald-400 to-teal-500 transition-all duration-300 ease-out";
+                criticalAlert.style.opacity = 0;
+                moodIcon.innerText = "😀";
+                moodStatusText.innerText = "企鵝心情棒極了！";
+                if (!isQuizMode && !isGameOver) setPenguinExpression('happy');
+            } else if (mood > 30) {
+                moodBar.className = "h-full bg-gradient-to-r from-amber-400 to-orange-400 transition-all duration-300 ease-out";
+                criticalAlert.style.opacity = 0;
+                moodIcon.innerText = "😐";
+                moodStatusText.innerText = "企鵝心情普通";
+                if (!isQuizMode && !isGameOver) setPenguinExpression('normal');
+            } else {
+                moodBar.className = "h-full bg-gradient-to-r from-red-500 to-rose-600 transition-all duration-300 ease-out";
+                criticalAlert.style.opacity = 1;
+                moodIcon.innerText = "😢";
+                moodStatusText.innerText = "企鵝快要哭了！";
+                if (!isQuizMode && !isGameOver) setPenguinExpression('sad');
+            }
+        }
+
+        // 控制企鵝的 SVG 表情
+        function setPenguinExpression(state) {
+            // 先隱藏所有表情
+            eyesNormal.classList.add('hidden');
+            eyesSad.classList.add('hidden');
+            eyesAngry.classList.add('hidden');
+            eyesHappy.classList.add('hidden');
+            beakNormal.classList.add('hidden');
+            beakCrying.classList.add('hidden');
+            beakHappy.classList.add('hidden');
+            
+            // 重置動畫類別
+            penguinSvg.className = "w-full h-full transition-all duration-300";
+            wingL.style.transform = "rotate(0deg)";
+            wingR.style.transform = "rotate(0deg)";
+
+            if (state === 'normal') {
+                eyesNormal.classList.remove('hidden');
+                beakNormal.classList.remove('hidden');
+                penguinSvg.classList.add('penguin-float');
+            } else if (state === 'sad') {
+                eyesSad.classList.remove('hidden');
+                beakCrying.classList.remove('hidden');
+                penguinSvg.classList.add('penguin-shake');
+                wingL.style.transform = "rotate(20deg)";
+                wingR.style.transform = "rotate(-20deg)";
+            } else if (state === 'angry') {
+                eyesAngry.classList.remove('hidden');
+                beakNormal.classList.remove('hidden');
+                penguinSvg.classList.add('penguin-shake');
+                wingL.style.transform = "rotate(-35deg)";
+                wingR.style.transform = "rotate(35deg)";
+            } else if (state === 'happy') {
+                eyesHappy.classList.remove('hidden');
+                beakHappy.classList.remove('hidden');
+                penguinSvg.classList.add('penguin-bounce');
+                wingL.style.transform = "rotate(-50deg)";
+                wingR.style.transform = "rotate(50deg)";
+            } else if (state === 'kiss') {
+                eyesHappy.classList.remove('hidden');
+                beakHappy.classList.remove('hidden');
+                penguinSvg.classList.add('penguin-bounce');
+                wingL.style.transform = "rotate(-60deg)";
+                wingR.style.transform = "rotate(60deg)";
+            }
+        }
+
+        // 浮動文字特效
+        function spawnFloatingText(text, colorClass) {
+            const el = document.createElement('div');
+            el.className = `absolute font-black text-2xl tracking-wide drop-shadow-md floating-text ${colorClass}`;
+            el.innerText = text;
+            effectContainer.appendChild(el);
+            setTimeout(() => {
+                el.remove();
+            }, 1200);
+        }
+
+        // 排程下一個隨機需求（3~5 秒）
+        function scheduleNextDemand(customDelay) {
+            if (isGameOver || isQuizMode) return;
+
+            const delay = customDelay || (Math.random() * 2000 + 3000); // 3000ms - 5000ms
+            
+            demandTimeout = setTimeout(() => {
+                triggerDemand();
+            }, delay);
+        }
+
+        // 觸發企鵝提出需求
+        function triggerDemand() {
+            if (isGameOver || isQuizMode) return;
+
+            // 隨機抽選需求，並確保不與上一次重複
+            let nextDemand;
+            do {
+                nextDemand = demandList[Math.floor(Math.random() * demandList.length)];
+            } while (currentDemand && nextDemand.id === currentDemand.id);
+
+            currentDemand = nextDemand;
+            
+            // 氣泡彈出動畫
+            speechBubbleContainer.classList.remove('scale-100');
+            speechBubbleContainer.classList.add('scale-0');
+            
+            setTimeout(() => {
+                speechBubble.innerText = currentDemand.text;
+                speechBubbleContainer.classList.remove('scale-0');
+                speechBubbleContainer.classList.add('scale-100');
+                // 對話框微幅彈跳
+                speechBubbleContainer.classList.add('animate-bounce');
+                setTimeout(() => speechBubbleContainer.classList.remove('animate-bounce'), 800);
+            }, 200);
+
+            // 企鵝回到普通神情等待回答
+            setPenguinExpression('normal');
+
+            // 再次排程
+            scheduleNextDemand();
+        }
+
+        // --- 5. 按鈕判定與隨機機制 ---
+
+        function handleOptionClick(btnIndex) {
+            if (isGameOver || isQuizMode) return;
+
+            // 如果企鵝目前沒有需求
+            if (!currentDemand) {
+                speechBubble.innerText = "我現在沒什麼需要的呀！先等等喔。";
+                return;
+            }
+
+            if (btnIndex === currentDemand.answerIndex) {
+                // 答對了！
+                // 30% 機率觸發壞運氣
+                if (Math.random() < 0.3) {
+                    triggerBadLuck();
+                } else {
+                    playSound('correct');
+                    changeMood(15);
+                    speechBubble.innerText = "哇！找到了！謝謝你！❤️";
+                    setPenguinExpression('happy');
+                    currentDemand = null; // 清除目前需求
+                }
+            } else {
+                // 答錯了！
+                playSound('wrong');
+                changeMood(-10);
+                speechBubble.innerText = "不對！請認真點！😤";
+                setPenguinExpression('angry');
+                
+                // 企鵝不悅動畫抖動
+                penguinSvg.classList.add('penguin-shake');
+                setTimeout(() => {
+                    if (!isQuizMode && !isGameOver) {
+                        penguinSvg.classList.remove('penguin-shake');
+                        setPenguinExpression('normal');
+                    }
+                }, 1000);
+            }
+        }
+
+        // --- 6. 壞運氣與隨堂測驗機制 ---
+
+        function triggerBadLuck() {
+            isQuizMode = true;
+            playSound('badluck');
+            
+            // 停止需求倒數
+            clearTimeout(demandTimeout);
+            
+            // 企鵝生氣
+            setPenguinExpression('angry');
+            
+            // 隨機選一個壞運氣文字
+            const text = badLuckTexts[Math.floor(Math.random() * badLuckTexts.length)];
+            badLuckBanner.innerText = `壞運氣！${text}`;
+
+            // 生成中文挑戰題
+            currentQuiz = quizBank[Math.floor(Math.random() * quizBank.length)];
+            quizQuestion.innerText = currentQuiz.q;
+
+            // 渲染選項
+            quizOptionsContainer.innerHTML = '';
+            
+            const options = [
+                { key: 'A', text: currentQuiz.a },
+                { key: 'B', text: currentQuiz.b },
+                { key: 'C', text: currentQuiz.c }
+            ];
+
+            options.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.className = "w-full text-left bg-slate-50 hover:bg-amber-50 active:scale-98 text-slate-800 font-bold py-3.5 px-5 rounded-2xl border-2 border-slate-200 hover:border-amber-400 transition-all flex items-center justify-between";
+                btn.innerHTML = `
+                    <span>${opt.text}</span>
+                    <span class="text-xs bg-slate-200 text-slate-600 px-2.5 py-1 rounded-md font-black">${opt.key}</span>
+                `;
+                btn.onclick = () => submitQuizAnswer(opt.key);
+                quizOptionsContainer.appendChild(btn);
+            });
+
+            // 隱藏反饋
+            quizFeedback.style.opacity = 0;
+
+            // 開啟彈出視窗
+            openModal(quizModal, quizCard);
+        }
+
+        function submitQuizAnswer(answerKey) {
+            if (answerKey === currentQuiz.ans) {
+                // 答對了！
+                playSound('correct');
+                isQuizMode = false;
+                
+                // 關閉 Modal
+                closeModal(quizModal, quizCard);
+                
+                // 提示企鵝心情變好
+                speechBubble.innerText = "答對了！太厲害了，我的心情變好啦！🥳";
+                changeMood(15); // 正確答對補血
+                setPenguinExpression('happy');
+                
+                currentDemand = null; // 清除先前的物品需求
+                
+                // 重啟遊戲進程
+                scheduleNextDemand(3000);
+            } else {
+                // 答錯了！
+                playSound('wrong');
+                changeMood(-10); // 答錯立刻扣10分
+                
+                // 閃動並顯示紅色反饋
+                quizFeedback.style.opacity = 1;
+                quizFeedback.classList.add('animate-bounce');
+                setTimeout(() => quizFeedback.classList.remove('animate-bounce'), 800);
+            }
+        }
+
+        // --- 7. Modal 控制 ---
+        function openModal(modal, card) {
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                card.classList.remove('scale-90');
+                card.classList.add('scale-100');
+            }, 50);
+        }
+
+        function closeModal(modal, card) {
+            modal.classList.add('opacity-0');
+            card.classList.remove('scale-100');
+            card.classList.add('scale-90');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        // --- 8. 輸贏結算 ---
+
+        function winGame() {
+            endGame(true);
+        }
+
+        function loseGame() {
+            endGame(false);
+        }
+
+        function endGame(isWin) {
+            isGameOver = true;
+            clearInterval(decayInterval);
+            clearTimeout(demandTimeout);
+            
+            // 播放對應結局音效
+            playSound(isWin ? 'win' : 'lose');
+
+            if (isWin) {
+                setPenguinExpression('kiss');
+                speechBubble.innerText = "😘 親一個！最愛主人了！";
+                
+                endEmoji.innerText = "🏆";
+                endTitle.innerText = "你救了小企鵝！";
+                endTitle.className = "text-3xl font-black text-emerald-600 mb-2 pixel-font";
+                endQuote.innerText = "「親一個！mua~~~ 😘」";
+                
+                // 漫天 Kiss 特效
+                triggerKissRain();
+            } else {
+                setPenguinExpression('sad');
+                speechBubble.innerText = "😭 我要換主人~~";
+                
+                endEmoji.innerText = "💔";
+                endTitle.innerText = "企鵝離家出走了...";
+                endTitle.className = "text-3xl font-black text-rose-600 mb-2 pixel-font";
+                endQuote.innerText = "「我要換主人~~ 嗚嗚嗚 😭」";
+            }
+
+            // 開啟結算視窗
+            setTimeout(() => {
+                openModal(endModal, endCard);
+            }, 1500);
+        }
+
+        // 噴出Kiss (emoji) 特效
+        function triggerKissRain() {
+            const emojis = ['😘', '💋', '❤️', '💖', '🥰'];
+            const rainInterval = setInterval(() => {
+                if (!isGameOver || mood < 100) {
+                    clearInterval(rainInterval);
+                    return;
+                }
+                
+                const kiss = document.createElement('div');
+                kiss.className = 'particle text-2xl';
+                kiss.innerHTML = emojis[Math.floor(Math.random() * emojis.length)];
+                kiss.style.left = Math.random() * 100 + 'vw';
+                kiss.style.fontSize = (Math.random() * 20 + 20) + 'px';
+                kiss.style.animationDuration = (Math.random() * 2 + 1.5) + 's';
+                document.body.appendChild(kiss);
+                
+                setTimeout(() => {
+                    kiss.remove();
+                }, 3500);
+            }, 100);
+
+            // 5秒後停止主動噴發（保留部分）
+            setTimeout(() => {
+                clearInterval(rainInterval);
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
